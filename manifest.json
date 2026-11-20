@@ -1,0 +1,17 @@
+{
+  "name": "Bus Driver Journal",
+  "short_name": "Driver Log",
+  "description": "Personal bus driving shift log, paper journal photo archive, and Google Drive sync.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#18181b",
+  "theme_color": "#f95d3b",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -1,0 +1,1600 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#f95d3b" />
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="./icon.svg" />
+  <link rel="apple-touch-icon" href="./icon.svg" />
+  <title>Bus Driver Journal — 운전 기록 저널</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    body {
+      font-family: 'Inter', 'Noto Sans KR', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: #f4f5f7;
+      color: #18181b;
+    }
+    .brand-coral { background-color: #f95d3b; }
+    .calendar-cell { min-height: 76px; }
+    @media (min-width: 640px) { .calendar-cell { min-height: 92px; } }
+    .photo-viewer-container {
+      overflow: auto;
+      background: #09090b;
+      touch-action: pinch-zoom pan-x pan-y;
+      -webkit-overflow-scrolling: touch;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <!-- Top Header -->
+  <header class="brand-coral text-white shadow-md sticky top-0 z-30">
+    <div class="max-w-5xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-2.5">
+      <div class="flex items-center gap-2.5">
+        <div class="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center font-bold text-lg">🚌</div>
+        <div>
+          <h1 id="app-title" class="text-base sm:text-lg font-bold leading-tight tracking-tight">운전 기록 저널</h1>
+          <p id="app-subtitle" class="text-xs text-white/90">Waverley Depot · 개인 증빙 및 메모</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button id="btn-toggle-lang" type="button"
+          class="px-2.5 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-bold border border-white/25 transition cursor-pointer">
+          EN / 한
+        </button>
+        <button id="btn-open-add" type="button"
+          class="bg-white text-[#f95d3b] hover:bg-orange-50 font-semibold text-xs sm:text-sm px-3.5 py-2 rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer">
+          <span>＋</span>
+          <span data-i18n="btnAdd">저널 기록</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Navigation & Search Bar -->
+    <div class="bg-zinc-900 text-white border-t border-white/10">
+      <div class="max-w-5xl mx-auto px-4 py-2.5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+        <div class="flex items-center gap-1 bg-zinc-800 p-1 rounded-xl self-start sm:self-auto">
+          <button type="button" data-tab="calendar" class="tab-btn px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition cursor-pointer bg-[#f95d3b] text-white" data-i18n="tabCalendar">📅 캘린더</button>
+          <button type="button" data-tab="list" class="tab-btn px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition cursor-pointer text-zinc-300 hover:text-white" data-i18n="tabList">📋 목록</button>
+          <button type="button" data-tab="settings" class="tab-btn px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition cursor-pointer text-zinc-300 hover:text-white" data-i18n="tabSettings">☁️ 클라우드·설정</button>
+        </div>
+
+        <div class="relative flex-1 max-w-md">
+          <span class="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 text-sm">🔍</span>
+          <input id="search-input" type="text"
+            placeholder="차량번호(2003), 노선(362), 시프트, 메모 검색..."
+            class="w-full bg-zinc-800 text-white placeholder-zinc-400 text-sm rounded-xl pl-9 pr-8 py-2 border border-zinc-700 focus:outline-none focus:border-[#f95d3b]" />
+          <button id="btn-clear-search" type="button" class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white text-xs cursor-pointer">✕</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="flex-1 max-w-5xl w-full mx-auto px-3 sm:px-4 py-4 sm:py-6">
+
+    <!-- Cloud Sync Status Pill -->
+    <div class="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+      <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-zinc-200 shadow-2xs">
+        <span id="cloud-dot" class="w-2 h-2 rounded-full bg-zinc-400"></span>
+        <span id="cloud-status-text" class="font-medium text-zinc-700">오프라인 / 로컬 모드 (클라우드 미연결)</span>
+      </div>
+      <button id="btn-quick-sync" type="button" class="hidden px-3 py-1.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white font-semibold cursor-pointer">
+        🔄 지금 동기화
+      </button>
+    </div>
+
+    <!-- Retention Cleanup Banner (Shown when old records exceed retention period) -->
+    <div id="retention-banner" class="hidden mb-4 bg-amber-50 border border-amber-300 text-amber-950 rounded-2xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-2xs">
+      <div class="flex items-start gap-2.5">
+        <span class="text-lg leading-none mt-0.5">🧹</span>
+        <div>
+          <p id="retention-banner-title" class="text-sm font-bold">보관 기간(1년)이 지난 기록이 있습니다.</p>
+          <p id="retention-banner-desc" class="text-xs text-amber-800 mt-0.5">개인 메모는 유지하고 오래된 사진·시간표만 정리할 수 있습니다.</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 shrink-0">
+        <button id="btn-open-cleanup" type="button" class="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold cursor-pointer" data-i18n="btnReviewClean">확인 후 정리</button>
+        <button id="btn-dismiss-retention" type="button" class="px-2.5 py-1.5 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 text-xs font-semibold cursor-pointer" data-i18n="btnLater">나중에</button>
+      </div>
+    </div>
+
+    <!-- Quick Stats Bar -->
+    <div class="grid grid-cols-3 gap-2.5 mb-4">
+      <div class="bg-white rounded-2xl p-3 shadow-sm border border-zinc-200/80">
+        <p class="text-[11px] sm:text-xs text-zinc-500 font-medium" data-i18n="statTotal">저장된 저널</p>
+        <p id="stat-total" class="text-lg sm:text-xl font-bold text-zinc-900 mt-0.5">0</p>
+      </div>
+      <div class="bg-white rounded-2xl p-3 shadow-sm border border-zinc-200/80">
+        <p class="text-[11px] sm:text-xs text-zinc-500 font-medium" data-i18n="statMonth">이번 달 기록</p>
+        <p id="stat-month" class="text-lg sm:text-xl font-bold text-[#f95d3b] mt-0.5">0</p>
+      </div>
+      <div class="bg-white rounded-2xl p-3 shadow-sm border border-zinc-200/80">
+        <p class="text-[11px] sm:text-xs text-zinc-500 font-medium" data-i18n="statLastBus">최근 운행 차량</p>
+        <p id="stat-last-bus" class="text-lg sm:text-xl font-bold text-zinc-900 mt-0.5 truncate">-</p>
+      </div>
+    </div>
+
+    <!-- Search Active Banner -->
+    <div id="search-banner" class="hidden mb-4 bg-orange-50 border border-orange-200 text-orange-900 rounded-xl px-4 py-2.5 flex items-center justify-between text-sm">
+      <span><span data-i18n="searchResult">검색 결과</span>: <strong id="search-count">0</strong> (<span id="search-term-display" class="font-semibold"></span>)</span>
+      <button id="btn-reset-search" type="button" class="text-xs font-semibold text-[#f95d3b] hover:underline cursor-pointer" data-i18n="btnShowAll">전체 보기</button>
+    </div>
+
+    <!-- VIEW 1: Calendar -->
+    <section id="view-calendar" class="space-y-4">
+      <div class="bg-zinc-950 text-white rounded-2xl shadow-lg overflow-hidden border border-zinc-800">
+        <div class="flex flex-wrap items-center justify-between gap-2 px-4 py-3.5 border-b border-zinc-800">
+          <div class="flex items-center gap-2">
+            <button id="btn-prev-month" type="button" class="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-xs sm:text-sm font-medium cursor-pointer">◀</button>
+            <h2 id="calendar-month-title" class="text-base sm:text-lg font-bold tracking-wide min-w-[115px] text-center">2026년 11월</h2>
+            <button id="btn-next-month" type="button" class="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-xs sm:text-sm font-medium cursor-pointer">▶</button>
+          </div>
+          <button id="btn-open-roster" type="button" class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-orange-300 text-xs sm:text-sm font-semibold border border-zinc-700 cursor-pointer" data-i18n="btnRoster">
+            🗓️ 이 달 시프트 입력
+          </button>
+        </div>
+
+        <div class="grid grid-cols-7 text-center text-[11px] font-bold tracking-wider text-zinc-400 bg-zinc-900/70 py-2 border-b border-zinc-800">
+          <div>MON</div><div>TUE</div><div>WED</div><div>THU</div><div>FRI</div>
+          <div class="text-orange-400">SAT</div><div class="text-rose-400">SUN</div>
+        </div>
+
+        <div id="calendar-grid" class="grid grid-cols-7 divide-x divide-y divide-zinc-800/80"></div>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-3 text-xs text-zinc-600 px-1">
+        <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-[#f95d3b]"></span> <span data-i18n="legendSaved">저널 저장됨</span></span>
+        <span class="inline-flex items-center gap-1.5"><span>📌</span> <span data-i18n="legendPinned">영구 보관 고정</span></span>
+        <span class="inline-flex items-center gap-1.5"><span>⚡</span> <span>Overtime</span></span>
+      </div>
+    </section>
+
+    <!-- VIEW 2: List -->
+    <section id="view-list" class="hidden space-y-3">
+      <div id="records-list" class="space-y-3"></div>
+    </section>
+
+    <!-- VIEW 3: Cloud Sync, Retention & Settings -->
+    <section id="view-settings" class="hidden space-y-4">
+
+      <!-- Google Drive BYOS Card -->
+      <div class="bg-white rounded-2xl p-5 shadow-sm border border-zinc-200 space-y-4">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 class="text-base font-bold text-zinc-900" data-i18n="cloudTitle">☁️ 내 구글 드라이브 연동 (BYOS)</h2>
+            <p class="text-xs sm:text-sm text-zinc-600 mt-1" data-i18n="cloudDesc">
+              본인의 구글 계정으로 로그인하면 구글 드라이브에 전용 폴더(Bus_Driver_Journal_Data)가 생성되어 폰과 PC에서 기록·사진이 자동 동기화됩니다.
+            </p>
+          </div>
+          <span id="drive-badge" class="px-2.5 py-1 rounded-full text-xs font-bold bg-zinc-100 text-zinc-600">미연결</span>
+        </div>
+
+        <div class="bg-zinc-50 rounded-xl p-3.5 border border-zinc-200 space-y-2">
+          <label class="block text-xs font-semibold text-zinc-700" data-i18n="clientIdLabel">Google OAuth Client ID (배포 시 코드에 기본 내장 가능)</label>
+          <div class="flex flex-col sm:flex-row gap-2">
+            <input id="setting-client-id" type="text" placeholder="123456789-xxxx.apps.googleusercontent.com"
+              class="flex-1 rounded-xl border border-zinc-300 bg-white px-3 py-2 text-xs sm:text-sm focus:outline-none focus:border-[#f95d3b]" />
+            <button id="btn-save-client-id" type="button" class="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-900 text-white text-xs sm:text-sm font-semibold cursor-pointer shrink-0" data-i18n="btnSaveKey">저장</button>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2.5">
+          <button id="btn-google-signin" type="button"
+            class="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold shadow-xs transition cursor-pointer flex items-center gap-2">
+            <span>🔐</span>
+            <span data-i18n="btnGoogleLogin">Google 드라이브 연결하기</span>
+          </button>
+          <button id="btn-drive-sync-now" type="button"
+            class="hidden px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold transition cursor-pointer">
+            🔄 지금 동기화
+          </button>
+          <button id="btn-google-signout" type="button"
+            class="hidden px-3.5 py-2.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-sm font-semibold transition cursor-pointer">
+            연결 해제
+          </button>
+        </div>
+      </div>
+
+      <!-- Data Retention & Auto-Cleanup Settings -->
+      <div class="bg-white rounded-2xl p-5 shadow-sm border border-zinc-200 space-y-4">
+        <div>
+          <h2 class="text-base font-bold text-zinc-900" data-i18n="retentionTitle">🧹 오래된 기록 보관 기간 &amp; 자동 정리</h2>
+          <p class="text-xs sm:text-sm text-zinc-600 mt-1" data-i18n="retentionDesc">
+            운행 증빙 사진과 시간표는 일정 기간(기본 1년)이 지나면 정리하고, 운전 중 적은 소중한 개인 메모만 따로 남길 수 있습니다. (📌 고정된 기록은 절대 삭제되지 않습니다.)
+          </p>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-zinc-700 mb-1" data-i18n="retentionPeriodLabel">보관 기간</label>
+            <select id="setting-retention-days" class="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm focus:outline-none focus:border-[#f95d3b]">
+              <option value="180">6개월 (180일)</option>
+              <option value="365" selected>1년 (365일 · 추천)</option>
+              <option value="730">2년 (730일)</option>
+              <option value="0">영구 보관 (정리 안 함)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-zinc-700 mb-1" data-i18n="retentionModeLabel">기간 만료 시 처리 방식</label>
+            <select id="setting-retention-mode" class="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm focus:outline-none focus:border-[#f95d3b]">
+              <option value="ask" selected>확인 후 정리 (알림 표시 · 안전)</option>
+              <option value="auto">앱 실행 시 자동 정리</option>
+            </select>
+          </div>
+        </div>
+
+        <label class="flex items-start gap-2.5 p-3.5 rounded-xl bg-amber-50/80 border border-amber-200 cursor-pointer select-none">
+          <input id="setting-keep-memos" type="checkbox" checked class="mt-0.5 rounded text-[#f95d3b] focus:ring-[#f95d3b]" />
+          <div>
+            <p class="text-sm font-semibold text-amber-950" data-i18n="keepMemoTitle">개인 메모(운전 중 생각)는 남기고 사진·운행 기록만 삭제</p>
+            <p class="text-xs text-amber-800 mt-0.5" data-i18n="keepMemoDesc">체크하면 메모가 있는 날은 저널 사진과 시간표만 비워 용량을 줄이고, 메모가 없는 날만 완전히 삭제합니다.</p>
+          </div>
+        </label>
+
+        <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-zinc-100">
+          <span id="retention-status-summary" class="text-xs font-medium text-zinc-600">현재 보관 기간 초과 기록: 0건</span>
+          <div class="flex items-center gap-2">
+            <button id="btn-check-cleanup-now" type="button" class="px-3.5 py-2 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 text-xs font-bold cursor-pointer" data-i18n="btnCheckClean">정리 대상 확인</button>
+            <button id="btn-save-retention" type="button" class="px-4 py-2 rounded-xl bg-[#f95d3b] hover:bg-[#e14d2d] text-white text-xs sm:text-sm font-semibold cursor-pointer" data-i18n="btnSaveSettings">설정 저장</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Depot & Profile + Manual File Backup -->
+      <div class="bg-white rounded-2xl p-5 shadow-sm border border-zinc-200 space-y-4">
+        <h2 class="text-base font-bold text-zinc-900" data-i18n="profileTitle">⚙️ 기본 디포 설정 &amp; 수동 백업</h2>
+        <div class="flex flex-col sm:flex-row gap-2">
+          <input id="setting-default-depot" type="text" placeholder="예: Waverley Depot" value="Waverley Depot"
+            class="flex-1 rounded-xl border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:border-[#f95d3b]" />
+          <button id="btn-save-depot" type="button" class="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-900 text-white text-sm font-semibold cursor-pointer shrink-0" data-i18n="btnSaveDepot">디포 저장</button>
+        </div>
+
+        <div class="flex flex-wrap gap-2.5 pt-2 border-t border-zinc-100">
+          <button id="btn-export-csv" type="button" class="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-semibold cursor-pointer">📊 CSV 내보내기</button>
+          <button id="btn-export-json" type="button" class="px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-900 text-white text-xs sm:text-sm font-semibold cursor-pointer">💾 JSON 전체 백업</button>
+          <label class="px-3.5 py-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-800 text-xs sm:text-sm font-semibold cursor-pointer border border-zinc-300">
+            📂 JSON 불러오기
+            <input id="input-import-json" type="file" accept=".json,application/json" class="hidden" />
+          </label>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- MODAL: Add / Edit Entry -->
+  <div id="modal-form" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden">
+      <div class="px-5 py-4 border-b border-zinc-200 flex items-center justify-between bg-zinc-50">
+        <h3 id="form-modal-title" class="text-base sm:text-lg font-bold text-zinc-900">새 저널 기록 추가</h3>
+        <button id="btn-close-form" type="button" class="text-zinc-500 hover:text-zinc-800 text-xl leading-none px-2 py-1 cursor-pointer">✕</button>
+      </div>
+
+      <form id="journal-form" class="p-5 overflow-y-auto space-y-4">
+        <input type="hidden" id="field-id" />
+
+        <div class="bg-zinc-50 border-2 border-dashed border-zinc-300 rounded-2xl p-4 text-center space-y-2.5">
+          <div id="photo-preview-wrap" class="hidden mb-2">
+            <img id="photo-preview-img" src="" alt="저널 미리보기" class="max-h-52 mx-auto rounded-xl shadow-sm object-contain" />
+          </div>
+          <div class="flex flex-wrap items-center justify-center gap-2">
+            <label class="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#f95d3b] hover:bg-[#e14d2d] text-white text-sm font-semibold cursor-pointer shadow-xs transition">
+              <span>📷</span><span data-i18n="btnCamera">사진 찍기</span>
+              <input id="field-photo-camera" type="file" accept="image/*" capture="environment" class="hidden" />
+            </label>
+            <label class="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-900 text-white text-sm font-semibold cursor-pointer shadow-xs transition">
+              <span>🖼️</span><span data-i18n="btnGallery">갤러리·파일 올리기</span>
+              <input id="field-photo-gallery" type="file" accept="image/*" class="hidden" />
+            </label>
+          </div>
+          <div id="ocr-status" class="hidden text-xs font-medium px-3 py-2 rounded-xl bg-blue-50 text-blue-800 border border-blue-200"></div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-zinc-700 mb-1" data-i18n="lblDate">운행 날짜 *</label>
+            <input id="field-date" type="date" required class="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:border-[#f95d3b]" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-zinc-700 mb-1" data-i18n="lblShift">시프트 (Shift) *</label>
+            <input id="field-shift" type="text" required placeholder="WD704a" class="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm uppercase focus:outline-none focus:border-[#f95d3b]" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-zinc-700 mb-1" data-i18n="lblDepot">디포 (Depot)</label>
+            <input id="field-depot" type="text" value="Waverley Depot" class="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:border-[#f95d3b]" />
+          </div>
+        </div>
+
+        <div class="flex flex-wrap gap-2">
+          <label class="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs sm:text-sm font-medium cursor-pointer select-none">
+            <input id="field-overtime" type="checkbox" class="rounded text-[#f95d3b]" />
+            <span>⚡ Overtime</span>
+          </label>
+          <label class="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-900 text-xs sm:text-sm font-medium cursor-pointer select-none">
+            <input id="field-pinned" type="checkbox" class="rounded text-indigo-600" />
+            <span data-i18n="lblPinned">📌 영구 보관 (자동 정리 제외)</span>
+          </label>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-zinc-700 mb-1" data-i18n="lblBus">운행 차량 번호 (Bus No.) *</label>
+            <input id="field-buses" type="text" required placeholder="2003, 4857" class="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:border-[#f95d3b]" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-zinc-700 mb-1" data-i18n="lblRoutes">운행 노선 (Routes)</label>
+            <input id="field-routes" type="text" placeholder="313, 362, 325, 324" class="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:border-[#f95d3b]" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-3 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-zinc-700 mb-1">Sign on</label>
+            <input id="field-signon" type="text" placeholder="08:08" class="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:border-[#f95d3b]" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-zinc-700 mb-1">Sign off</label>
+            <input id="field-signoff" type="text" placeholder="17:48" class="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:border-[#f95d3b]" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-zinc-700 mb-1">Spread</label>
+            <input id="field-spread" type="text" placeholder="09h40" class="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:border-[#f95d3b]" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-zinc-700 mb-1" data-i18n="lblOcr">추출된 시간표 / 세부 기록 (검색용)</label>
+          <textarea id="field-ocr" rows="3" class="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:border-[#f95d3b]"></textarea>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-zinc-700 mb-1" data-i18n="lblMemo">특이사항 및 운전 중 생각 (메모)</label>
+          <textarea id="field-memo" rows="3" class="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:border-[#f95d3b]"></textarea>
+        </div>
+
+        <div class="pt-2 flex items-center justify-end gap-2 border-t border-zinc-200">
+          <button id="btn-cancel-form" type="button" class="px-4 py-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-sm font-semibold cursor-pointer" data-i18n="btnCancel">취소</button>
+          <button type="submit" class="px-5 py-2 rounded-xl bg-[#f95d3b] hover:bg-[#e14d2d] text-white text-sm font-semibold shadow-sm cursor-pointer" data-i18n="btnSave">저장하기</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: View Detail / Proof Viewer -->
+  <div id="modal-detail" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-1.5 sm:p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-5xl h-[92vh] sm:h-auto sm:max-h-[92vh] flex flex-col overflow-hidden">
+      <div class="px-4 sm:px-5 py-3 border-b border-zinc-200 flex items-center justify-between bg-zinc-50 shrink-0">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span id="detail-date" class="text-base sm:text-lg font-bold text-zinc-900">2026-11-14</span>
+          <span id="detail-shift" class="px-2.5 py-0.5 rounded-lg bg-[#f95d3b] text-white text-xs font-bold">WD704a</span>
+          <span id="detail-pin-badge" class="hidden px-2 py-0.5 rounded-lg bg-indigo-100 text-indigo-800 text-xs font-bold">📌 고정</span>
+          <span id="detail-depot" class="text-xs text-zinc-500 font-medium">Waverley Depot</span>
+        </div>
+        <button id="btn-close-detail" type="button" class="text-zinc-500 hover:text-zinc-800 text-xl leading-none px-2 py-1 cursor-pointer">✕</button>
+      </div>
+
+      <!-- Mobile Tab Bar -->
+      <div class="lg:hidden grid grid-cols-2 gap-1.5 p-2 bg-zinc-100 border-b border-zinc-200 shrink-0">
+        <button id="btn-detail-tab-info" type="button" class="py-2 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer bg-white text-[#f95d3b] shadow-xs" data-i18n="tabDetailInfo">📋 기록 내용</button>
+        <button id="btn-detail-tab-photo" type="button" class="py-2 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer text-zinc-600 hover:text-zinc-900" data-i18n="tabDetailPhoto">📄 원본 사진</button>
+      </div>
+
+      <div class="flex-1 min-h-0 flex flex-col lg:grid lg:grid-cols-2 overflow-hidden">
+        <!-- Left: Photo Viewer -->
+        <div id="detail-pane-photo" class="hidden lg:flex flex-col flex-1 min-h-0 bg-zinc-950 lg:border-r border-zinc-200">
+          <div class="px-3 py-2 bg-zinc-900 text-zinc-200 flex items-center justify-between gap-2 text-xs border-b border-zinc-800 shrink-0">
+            <div class="flex items-center gap-1">
+              <button id="btn-zoom-out" type="button" class="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 cursor-pointer font-bold">－</button>
+              <span id="zoom-label" class="w-11 text-center font-mono text-[11px]">100%</span>
+              <button id="btn-zoom-in" type="button" class="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 cursor-pointer font-bold">＋</button>
+              <button id="btn-zoom-reset" type="button" class="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 cursor-pointer text-[11px]">1:1</button>
+            </div>
+            <button id="btn-open-lightbox" type="button" class="px-2.5 py-1 rounded-lg bg-[#f95d3b] hover:bg-[#e14d2d] text-white font-semibold text-[11px] cursor-pointer shrink-0" data-i18n="btnFullscreen">⛶ 전체화면</button>
+          </div>
+          <div class="photo-viewer-container flex-1 min-h-0 p-2.5 text-center">
+            <img id="detail-photo" src="" alt="저널 원본" class="inline-block max-w-full max-h-full object-contain rounded cursor-zoom-in" />
+            <div id="detail-no-photo" class="hidden text-zinc-400 text-sm py-16 text-center" data-i18n="noPhoto">등록된 저널 사진이 없습니다.</div>
+          </div>
+        </div>
+
+        <!-- Right: Details -->
+        <div id="detail-pane-info" class="flex-1 min-h-0 p-4 sm:p-5 space-y-4 overflow-y-auto">
+          <button id="btn-mobile-photo-card" type="button"
+            class="lg:hidden w-full flex items-center gap-3 p-2.5 rounded-2xl bg-zinc-900 text-white hover:bg-zinc-800 transition text-left cursor-pointer shadow-xs">
+            <img id="detail-thumb-img" src="" alt="썸네일" class="w-14 h-16 rounded-xl object-cover bg-zinc-800 shrink-0 border border-zinc-700" />
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-bold text-white" data-i18n="mobilePhotoTitle">📄 저널 원본 사진 보기</p>
+              <p class="text-xs text-zinc-400 mt-0.5" data-i18n="mobilePhotoSub">터치하면 화면 가득 크게 확대됩니다</p>
+            </div>
+            <span class="px-2.5 py-1 rounded-lg bg-[#f95d3b] text-white text-xs font-bold shrink-0">⛶</span>
+          </button>
+
+          <div>
+            <p class="text-xs font-semibold text-zinc-500 uppercase tracking-wider" data-i18n="lblBus">운행 차량 번호 (Bus No.)</p>
+            <div id="detail-buses" class="flex flex-wrap gap-2 mt-1.5"></div>
+          </div>
+
+          <div class="grid grid-cols-3 gap-2 bg-zinc-50 p-3 rounded-xl border border-zinc-200">
+            <div><p class="text-[11px] text-zinc-500">Sign on</p><p id="detail-signon" class="text-sm font-bold text-zinc-900">-</p></div>
+            <div><p class="text-[11px] text-zinc-500">Sign off</p><p id="detail-signoff" class="text-sm font-bold text-zinc-900">-</p></div>
+            <div><p class="text-[11px] text-zinc-500">Spread</p><p id="detail-spread" class="text-sm font-bold text-[#f95d3b]">-</p></div>
+          </div>
+
+          <div>
+            <p class="text-xs font-semibold text-zinc-500 uppercase tracking-wider" data-i18n="lblRoutes">운행 노선 (Routes)</p>
+            <div id="detail-routes" class="flex flex-wrap gap-1.5 mt-1.5"></div>
+          </div>
+
+          <div>
+            <p class="text-xs font-semibold text-zinc-500 uppercase tracking-wider" data-i18n="lblOcr">추출된 시간표 / 세부 기록</p>
+            <div id="detail-ocr" class="mt-1.5 text-sm text-zinc-800 bg-zinc-50 p-3 rounded-xl border border-zinc-200 whitespace-pre-wrap leading-relaxed"></div>
+          </div>
+
+          <div>
+            <p class="text-xs font-semibold text-zinc-500 uppercase tracking-wider" data-i18n="lblMemo">특이사항 &amp; 운전 중 생각</p>
+            <div id="detail-memo" class="mt-1.5 text-sm text-zinc-800 bg-amber-50/70 p-3 rounded-xl border border-amber-200/80 whitespace-pre-wrap leading-relaxed"></div>
+          </div>
+
+          <div class="pt-3 border-t border-zinc-200 flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <button id="btn-delete-ask" type="button" class="px-3 py-2 rounded-xl text-rose-600 hover:bg-rose-50 text-xs sm:text-sm font-semibold cursor-pointer" data-i18n="btnDelete">삭제</button>
+              <button id="btn-delete-confirm" type="button" class="hidden px-3 py-2 rounded-xl bg-rose-600 text-white text-xs sm:text-sm font-semibold cursor-pointer" data-i18n="btnDeleteConfirm">정말 삭제?</button>
+              <button id="btn-delete-cancel" type="button" class="hidden px-2.5 py-2 rounded-xl bg-zinc-100 text-zinc-700 text-xs font-semibold cursor-pointer" data-i18n="btnCancel">취소</button>
+            </div>
+            <button id="btn-edit-detail" type="button" class="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-semibold cursor-pointer" data-i18n="btnEdit">✏️ 수정</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Fullscreen Photo Lightbox -->
+  <div id="modal-lightbox" class="hidden fixed inset-0 z-[60] bg-black flex flex-col">
+    <div class="px-3 py-2.5 bg-zinc-950/95 text-white flex items-center justify-between gap-2 border-b border-zinc-800 shrink-0">
+      <div class="flex items-center gap-1.5">
+        <button id="btn-lb-zoom-out" type="button" class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sm font-bold cursor-pointer">－</button>
+        <span id="lb-zoom-label" class="w-12 text-center font-mono text-xs">100%</span>
+        <button id="btn-lb-zoom-in" type="button" class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sm font-bold cursor-pointer">＋</button>
+        <button id="btn-lb-zoom-reset" type="button" class="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium cursor-pointer">1:1</button>
+      </div>
+      <button id="btn-close-lightbox" type="button" class="px-3 py-1.5 rounded-lg bg-[#f95d3b] hover:bg-[#e14d2d] text-white text-xs sm:text-sm font-bold cursor-pointer" data-i18n="btnClose">✕ 닫기</button>
+    </div>
+    <div class="photo-viewer-container flex-1 min-h-0 p-2 text-center bg-black">
+      <img id="lightbox-photo" src="" alt="전체화면" class="inline-block max-w-full max-h-full object-contain" />
+    </div>
+  </div>
+
+  <!-- MODAL: Monthly Roster Editor -->
+  <div id="modal-roster" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+      <div class="px-5 py-4 border-b border-zinc-200 flex items-center justify-between bg-zinc-50">
+        <div>
+          <h3 id="roster-modal-title" class="text-base sm:text-lg font-bold text-zinc-900">월간 시프트 입력/수정</h3>
+          <p class="text-xs text-zinc-500 mt-0.5" data-i18n="rosterSub">새 달 시프트를 넣거나 OFF → Overtime 변경 시 수정하세요.</p>
+        </div>
+        <button id="btn-close-roster" type="button" class="text-zinc-500 hover:text-zinc-800 text-xl leading-none px-2 py-1 cursor-pointer">✕</button>
+      </div>
+      <div class="p-4 sm:p-5 overflow-y-auto space-y-4">
+        <div class="bg-zinc-50 p-3.5 rounded-xl border border-zinc-200 space-y-2">
+          <label class="block text-xs font-semibold text-zinc-700">⚡ Quick Paste (1:WD194, 2:OFF ...)</label>
+          <div class="flex gap-2">
+            <input id="roster-bulk-input" type="text" placeholder="1:WD194, 2:WD288, 3:OFF ..." class="flex-1 rounded-xl border border-zinc-300 px-3 py-1.5 text-xs sm:text-sm focus:outline-none focus:border-[#f95d3b]" />
+            <button id="btn-apply-bulk-roster" type="button" class="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-900 text-white text-xs font-semibold shrink-0 cursor-pointer" data-i18n="btnApply">적용</button>
+          </div>
+        </div>
+        <div id="roster-days-grid" class="grid grid-cols-2 sm:grid-cols-4 gap-2"></div>
+      </div>
+      <div class="px-5 py-3.5 border-t border-zinc-200 flex items-center justify-end gap-2 bg-zinc-50">
+        <button id="btn-cancel-roster" type="button" class="px-4 py-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-sm font-semibold cursor-pointer" data-i18n="btnCancel">취소</button>
+        <button id="btn-save-roster" type="button" class="px-5 py-2 rounded-xl bg-[#f95d3b] hover:bg-[#e14d2d] text-white text-sm font-semibold shadow-sm cursor-pointer" data-i18n="btnSaveRoster">달력에 저장</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Expired Records Cleanup Confirmation -->
+  <div id="modal-cleanup" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden">
+      <div class="px-5 py-4 border-b border-zinc-200 flex items-center justify-between bg-amber-50">
+        <h3 class="text-base font-bold text-amber-950" data-i18n="cleanupModalTitle">🧹 보관 기간 지난 기록 정리</h3>
+        <button id="btn-close-cleanup" type="button" class="text-zinc-500 hover:text-zinc-800 text-xl leading-none px-2 py-1 cursor-pointer">✕</button>
+      </div>
+      <div class="p-5 overflow-y-auto space-y-3">
+        <p id="cleanup-modal-desc" class="text-sm text-zinc-700"></p>
+        <div id="cleanup-list" class="space-y-2 max-h-60 overflow-y-auto"></div>
+      </div>
+      <div class="px-5 py-3.5 border-t border-zinc-200 flex items-center justify-end gap-2 bg-zinc-50">
+        <button id="btn-cancel-cleanup" type="button" class="px-4 py-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-sm font-semibold cursor-pointer" data-i18n="btnCancel">취소</button>
+        <button id="btn-execute-cleanup" type="button" class="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold cursor-pointer" data-i18n="btnRunClean">정리 실행</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="hidden fixed bottom-5 left-1/2 -translate-x-1/2 z-50 bg-zinc-900 text-white text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg"></div>
+
+  <script>
+    // Set your Google Cloud OAuth Client ID here for public deployment
+    const DEFAULT_GOOGLE_CLIENT_ID = '';
+
+    const STORAGE_KEY = 'bdj_records_v2';
+    const ROSTER_KEY = 'bdj_roster_v2';
+    const SETTINGS_KEY = 'bdj_settings_v2';
+    const DRIVE_FOLDER_NAME = 'Bus_Driver_Journal_Data';
+    const DRIVE_DB_FILENAME = 'journals_db.json';
+
+    const I18N = {
+      ko: {
+        appTitle: '운전 기록 저널',
+        btnAdd: '저널 기록',
+        tabCalendar: '📅 캘린더',
+        tabList: '📋 목록',
+        tabSettings: '☁️ 클라우드·설정',
+        statTotal: '저장된 저널',
+        statMonth: '이번 달 기록',
+        statLastBus: '최근 운행 차량',
+        searchPlaceholder: '차량번호(2003), 노선(362), 시프트, 메모 검색...',
+        searchResult: '검색 결과',
+        btnShowAll: '전체 보기',
+        btnRoster: '🗓️ 이 달 시프트 입력',
+        legendSaved: '저널 저장됨',
+        legendPinned: '영구 보관 고정',
+        cloudTitle: '☁️ 내 구글 드라이브 연동 (BYOS)',
+        cloudDesc: '본인의 구글 계정으로 로그인하면 구글 드라이브에 전용 폴더(Bus_Driver_Journal_Data)가 생성되어 폰과 PC에서 기록·사진이 자동 동기화됩니다.',
+        clientIdLabel: 'Google OAuth Client ID (배포 시 코드에 기본 내장 가능)',
+        btnSaveKey: '저장',
+        btnGoogleLogin: 'Google 드라이브 연결하기',
+        retentionTitle: '🧹 오래된 기록 보관 기간 & 자동 정리',
+        retentionDesc: '운행 증빙 사진과 시간표는 일정 기간(기본 1년)이 지나면 정리하고, 운전 중 적은 소중한 개인 메모만 따로 남길 수 있습니다. (📌 고정된 기록은 절대 삭제되지 않습니다.)',
+        retentionPeriodLabel: '보관 기간',
+        retentionModeLabel: '기간 만료 시 처리 방식',
+        keepMemoTitle: '개인 메모(운전 중 생각)는 남기고 사진·운행 기록만 삭제',
+        keepMemoDesc: '체크하면 메모가 있는 날은 저널 사진과 시간표만 비워 용량을 줄이고, 메모가 없는 날만 완전히 삭제합니다.',
+        btnCheckClean: '정리 대상 확인',
+        btnSaveSettings: '설정 저장',
+        profileTitle: '⚙️ 기본 디포 설정 & 수동 백업',
+        btnSaveDepot: '디포 저장',
+        btnCamera: '사진 찍기',
+        btnGallery: '갤러리·파일 올리기',
+        lblDate: '운행 날짜 *',
+        lblShift: '시프트 (Shift) *',
+        lblDepot: '디포 (Depot)',
+        lblPinned: '📌 영구 보관 (자동 정리 제외)',
+        lblBus: '운행 차량 번호 (Bus No.) *',
+        lblRoutes: '운행 노선 (Routes)',
+        lblOcr: '추출된 시간표 / 세부 기록',
+        lblMemo: '특이사항 및 운전 중 생각 (메모)',
+        btnCancel: '취소',
+        btnSave: '저장하기',
+        tabDetailInfo: '📋 기록 내용',
+        tabDetailPhoto: '📄 원본 사진',
+        btnFullscreen: '⛶ 전체화면',
+        noPhoto: '등록된 저널 사진이 없습니다.',
+        mobilePhotoTitle: '📄 저널 원본 사진 보기',
+        mobilePhotoSub: '터치하면 화면 가득 크게 확대됩니다',
+        btnDelete: '삭제',
+        btnDeleteConfirm: '정말 삭제?',
+        btnEdit: '✏️ 수정',
+        btnClose: '✕ 닫기',
+        rosterSub: '새 달 시프트를 넣거나 OFF → Overtime 변경 시 수정하세요.',
+        btnApply: '적용',
+        btnSaveRoster: '달력에 저장',
+        btnReviewClean: '확인 후 정리',
+        btnLater: '나중에',
+        cleanupModalTitle: '🧹 보관 기간 지난 기록 정리',
+        btnRunClean: '정리 실행'
+      },
+      en: {
+        appTitle: 'Bus Driver Journal',
+        btnAdd: 'Log Shift',
+        tabCalendar: '📅 Calendar',
+        tabList: '📋 Logs',
+        tabSettings: '☁️ Cloud & Settings',
+        statTotal: 'Saved Logs',
+        statMonth: 'This Month',
+        statLastBus: 'Last Bus No.',
+        searchPlaceholder: 'Search bus no. (2003), route (362), shift, memo...',
+        searchResult: 'Results',
+        btnShowAll: 'Show All',
+        btnRoster: '🗓️ Edit Monthly Roster',
+        legendSaved: 'Journal Saved',
+        legendPinned: 'Pinned (Keep Forever)',
+        cloudTitle: '☁️ Personal Google Drive Sync (BYOS)',
+        cloudDesc: 'Sign in with your Google account to sync all logs and photos directly to your own Google Drive folder (Bus_Driver_Journal_Data).',
+        clientIdLabel: 'Google OAuth Client ID (pre-configured when published)',
+        btnSaveKey: 'Save',
+        btnGoogleLogin: 'Connect Google Drive',
+        retentionTitle: '🧹 Data Retention & Auto-Cleanup',
+        retentionDesc: 'Automatically clean up old shift photos and timetables after your chosen retention period while optionally keeping personal memos. Pinned logs (📌) are never deleted.',
+        retentionPeriodLabel: 'Retention Period',
+        retentionModeLabel: 'When Expired',
+        keepMemoTitle: 'Keep personal memos (delete photos & shift timetables only)',
+        keepMemoDesc: 'Logs with personal notes will keep the date and memo while freeing up photo storage. Logs without memos are removed.',
+        btnCheckClean: 'Check Expired',
+        btnSaveSettings: 'Save Settings',
+        profileTitle: '⚙️ Default Depot & Manual Backup',
+        btnSaveDepot: 'Save Depot',
+        btnCamera: 'Take Photo',
+        btnGallery: 'Choose Photo',
+        lblDate: 'Date *',
+        lblShift: 'Shift *',
+        lblDepot: 'Depot',
+        lblPinned: '📌 Pin (Exclude from Auto-Cleanup)',
+        lblBus: 'Bus Number(s) *',
+        lblRoutes: 'Routes',
+        lblOcr: 'Extracted Timetable / OCR Text',
+        lblMemo: 'Notes & Driving Thoughts (Memo)',
+        btnCancel: 'Cancel',
+        btnSave: 'Save Log',
+        tabDetailInfo: '📋 Shift Info',
+        tabDetailPhoto: '📄 Original Photo',
+        btnFullscreen: '⛶ Fullscreen',
+        noPhoto: 'No journal photo attached.',
+        mobilePhotoTitle: '📄 View Original Journal Photo',
+        mobilePhotoSub: 'Tap to zoom full screen',
+        btnDelete: 'Delete',
+        btnDeleteConfirm: 'Confirm Delete?',
+        btnEdit: '✏️ Edit',
+        btnClose: '✕ Close',
+        rosterSub: 'Add next month shifts or update OFF → Overtime.',
+        btnApply: 'Apply',
+        btnSaveRoster: 'Save Roster',
+        btnReviewClean: 'Review & Clean',
+        btnLater: 'Later',
+        cleanupModalTitle: '🧹 Clean Up Expired Logs',
+        btnRunClean: 'Run Cleanup'
+      }
+    };
+
+    const DEFAULT_ROSTER = {
+      '2026-11-09': 'WD194', '2026-11-10': 'WD288', '2026-11-11': 'WD136',
+      '2026-11-12': 'WD166', '2026-11-13': 'WD288', '2026-11-14': 'WD704a',
+      '2026-11-16': 'WD194', '2026-11-17': 'OFF', '2026-11-21': 'WD729'
+    };
+
+    const INITIAL_SAMPLE = [
+      {
+        id: 'sample-2026-11-14',
+        date: '2026-11-14',
+        shift: 'WD704a',
+        overtime: false,
+        pinned: false,
+        depot: 'Waverley Depot',
+        busNumbers: '2003, 4857',
+        routes: '313, 362, 325, 324',
+        signOn: '08:08',
+        signOff: '17:48',
+        spread: '09h40',
+        ocrText: '313 Bondi Jct 08:26 ↔ Coogee Beach 08:42\n362 Coogee Beach 09:45 ↔ Rose Bay Wharf 10:20 (Bus 4857 swap)\n325 Edgecliff 14:03 ↔ Watsons Bay 14:33\n324 Edgecliff 15:26 ↔ Watsons Bay 15:53',
+        memo: '초반 2003번 차량 운행 후 10:20 Rose Bay Wharf에서 4857번으로 교체. 주말 해변 노선 무난하게 마침.',
+        photoData: '',
+        updatedAt: '2026-11-14T18:30:00+11:00'
+      }
+    ];
+
+    let records = [];
+    let roster = {};
+    let settings = {
+      lang: 'ko',
+      depot: 'Waverley Depot',
+      retentionDays: 365,
+      retentionMode: 'ask',
+      keepMemos: true,
+      clientId: DEFAULT_GOOGLE_CLIENT_ID
+    };
+
+    let currentTab = 'calendar';
+    let currentYear = 2026;
+    let currentMonth = 10; // Nov 2026
+    let searchQuery = '';
+    let activeDetailId = null;
+    let currentZoom = 1;
+    let lightboxZoom = 1;
+    let pendingPhotoData = '';
+    let driveAccessToken = '';
+    let driveFolderId = '';
+    let driveDbFileId = '';
+
+    function t(key) { return (I18N[settings.lang] && I18N[settings.lang][key]) || I18N.ko[key] || key; }
+
+    function applyTranslations() {
+      document.documentElement.lang = settings.lang;
+      document.getElementById('app-title').textContent = t('appTitle');
+      document.getElementById('app-subtitle').textContent = `${settings.depot} · ${settings.lang === 'ko' ? '개인 증빙 및 메모' : 'Shift Proof & Notes'}`;
+      document.getElementById('search-input').placeholder = t('searchPlaceholder');
+      document.querySelectorAll('[data-i18n]').forEach(el => {
+        const k = el.getAttribute('data-i18n');
+        if (I18N[settings.lang][k]) el.textContent = I18N[settings.lang][k];
+      });
+    }
+
+    function loadLocalState() {
+      try {
+        const s = JSON.parse(localStorage.getItem(SETTINGS_KEY));
+        if (s && typeof s === 'object') settings = { ...settings, ...s };
+      } catch (e) {}
+      try {
+        const r = JSON.parse(localStorage.getItem(ROSTER_KEY));
+        roster = (r && typeof r === 'object') ? r : { ...DEFAULT_ROSTER };
+      } catch (e) { roster = { ...DEFAULT_ROSTER }; }
+      try {
+        const recs = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        records = (Array.isArray(recs) && recs.length > 0) ? recs : JSON.parse(JSON.stringify(INITIAL_SAMPLE));
+      } catch (e) { records = JSON.parse(JSON.stringify(INITIAL_SAMPLE)); }
+    }
+
+    function saveLocalState() {
+      try {
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+        localStorage.setItem(ROSTER_KEY, JSON.stringify(roster));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+      } catch (e) {
+        showToast(settings.lang === 'ko' ? '로컬 용량이 부족합니다. 구글 드라이브 연결 또는 정리를 권장합니다.' : 'Local storage full. Connect Google Drive or run cleanup.');
+      }
+      if (driveAccessToken) syncToGoogleDrive(false);
+    }
+
+    function showToast(msg) {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.classList.remove('hidden');
+      clearTimeout(window._toastTimer);
+      window._toastTimer = setTimeout(() => el.classList.add('hidden'), 3000);
+    }
+
+    // --- Retention & Cleanup Logic ---
+    function getExpiredRecords() {
+      const days = Number(settings.retentionDays || 0);
+      if (days <= 0) return [];
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - days);
+      const cutoffStr = cutoff.toISOString().slice(0, 10);
+      return records.filter(r => {
+        if (r.pinned) return false;
+        if (!r.date || r.date >= cutoffStr) return false;
+        // If keepMemos is on and record already has no photo/ocr/bus (already trimmed to memo-only), skip
+        if (settings.keepMemos && r.memo && !r.photoData && !r.ocrText && !r.busNumbers) return false;
+        return true;
+      });
+    }
+
+    function executeCleanup(expiredList) {
+      if (!expiredList.length) return 0;
+      const expiredIds = new Set(expiredList.map(r => r.id));
+      let affected = 0;
+      const next = [];
+      records.forEach(r => {
+        if (!expiredIds.has(r.id)) { next.push(r); return; }
+        affected++;
+        if (settings.keepMemos && r.memo && r.memo.trim()) {
+          next.push({
+            ...r,
+            photoData: '',
+            ocrText: '',
+            busNumbers: '',
+            routes: '',
+            signOn: '',
+            signOff: '',
+            spread: '',
+            shift: r.shift ? (r.shift + ' (메모보관)') : 'MEMO'
+          });
+        }
+      });
+      records = next;
+      saveLocalState();
+      renderAll();
+      updateRetentionUI();
+      return affected;
+    }
+
+    function updateRetentionUI(autoRunIfEnabled = false) {
+      const expired = getExpiredRecords();
+      const summaryEl = document.getElementById('retention-status-summary');
+      const bannerEl = document.getElementById('retention-banner');
+
+      if (settings.lang === 'ko') {
+        summaryEl.textContent = `현재 보관 기간 초과 기록: ${expired.length}건`;
+      } else {
+        summaryEl.textContent = `Expired logs ready for cleanup: ${expired.length}`;
+      }
+
+      if (expired.length === 0) {
+        bannerEl.classList.add('hidden');
+        return;
+      }
+
+      if (autoRunIfEnabled && settings.retentionMode === 'auto') {
+        const cnt = executeCleanup(expired);
+        showToast(settings.lang === 'ko'
+          ? `보관 기간이 지난 기록 ${cnt}건을 자동 정리했습니다.`
+          : `Auto-cleaned ${cnt} expired log(s).`);
+        return;
+      }
+
+      document.getElementById('retention-banner-title').textContent = settings.lang === 'ko'
+        ? `보관 기간이 지난 기록 ${expired.length}건이 있습니다.`
+        : `${expired.length} log(s) passed your retention period.`;
+      document.getElementById('retention-banner-desc').textContent = settings.keepMemos
+        ? (settings.lang === 'ko' ? '개인 메모는 남기고 사진·시간표만 정리됩니다.' : 'Personal memos will be kept; photos & timetables will be cleared.')
+        : (settings.lang === 'ko' ? '기간이 지난 기록이 완전히 삭제됩니다.' : 'Expired logs will be permanently deleted.');
+      bannerEl.classList.remove('hidden');
+    }
+
+    function openCleanupModal() {
+      const expired = getExpiredRecords();
+      const desc = document.getElementById('cleanup-modal-desc');
+      const list = document.getElementById('cleanup-list');
+      list.innerHTML = '';
+
+      if (expired.length === 0) {
+        showToast(settings.lang === 'ko' ? '정리할 오래된 기록이 없습니다.' : 'No expired logs to clean.');
+        return;
+      }
+
+      desc.textContent = settings.keepMemos
+        ? (settings.lang === 'ko'
+          ? `아래 ${expired.length}건 중 메모가 있는 기록은 메모만 남기고 사진·시간표를 비우며, 메모가 없는 기록은 삭제합니다.`
+          : `For the ${expired.length} log(s) below, memos will be preserved while photos/timetables are removed.`)
+        : (settings.lang === 'ko'
+          ? `아래 ${expired.length}건의 기록을 완전히 삭제합니다.`
+          : `The ${expired.length} log(s) below will be permanently deleted.`);
+
+      expired.forEach(r => {
+        const row = document.createElement('div');
+        row.className = 'p-2.5 rounded-xl bg-zinc-50 border border-zinc-200 flex items-center justify-between text-xs';
+        row.innerHTML = `
+          <div>
+            <span class="font-bold text-zinc-900">${r.date}</span>
+            <span class="ml-1.5 text-[#f95d3b] font-semibold">${r.shift || '-'}</span>
+            ${r.memo ? '<span class="ml-1.5 px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-medium">메모 보존</span>' : ''}
+          </div>
+          <span class="text-zinc-500">🚌 ${r.busNumbers || '-'}</span>`;
+        list.appendChild(row);
+      });
+
+      document.getElementById('modal-cleanup').classList.remove('hidden');
+    }
+
+    // --- Google Drive Direct Sync (BYOS - drive.file scope) ---
+    function updateCloudBadge(connected, text) {
+      const dot = document.getElementById('cloud-dot');
+      const status = document.getElementById('cloud-status-text');
+      const badge = document.getElementById('drive-badge');
+      const quickBtn = document.getElementById('btn-quick-sync');
+      const syncNow = document.getElementById('btn-drive-sync-now');
+      const signOut = document.getElementById('btn-google-signout');
+      const signIn = document.getElementById('btn-google-signin');
+
+      dot.className = `w-2 h-2 rounded-full ${connected ? 'bg-emerald-500' : 'bg-zinc-400'}`;
+      status.textContent = text;
+      badge.textContent = connected ? (settings.lang === 'ko' ? '연결됨' : 'Connected') : (settings.lang === 'ko' ? '미연결' : 'Disconnected');
+      badge.className = `px-2.5 py-1 rounded-full text-xs font-bold ${connected ? 'bg-emerald-100 text-emerald-800' : 'bg-zinc-100 text-zinc-600'}`;
+      quickBtn.classList.toggle('hidden', !connected);
+      syncNow.classList.toggle('hidden', !connected);
+      signOut.classList.toggle('hidden', !connected);
+      signIn.classList.toggle('hidden', connected);
+    }
+
+    async function ensureDriveFolder() {
+      if (driveFolderId) return driveFolderId;
+      try {
+        const q = encodeURIComponent(`name='${DRIVE_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+        const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)`, {
+          headers: { Authorization: 'Bearer ' + driveAccessToken }
+        });
+        if (!res.ok) throw new Error('Folder lookup failed');
+        const data = await res.json();
+        if (data.files && data.files.length > 0) {
+          driveFolderId = data.files[0].id;
+          return driveFolderId;
+        }
+        const createRes = await fetch('https://www.googleapis.com/drive/v3/files', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + driveAccessToken, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: DRIVE_FOLDER_NAME, mimeType: 'application/vnd.google-apps.folder' })
+        });
+        if (!createRes.ok) throw new Error('Folder create failed');
+        const created = await createRes.json();
+        driveFolderId = created.id;
+        return driveFolderId;
+      } catch (err) {
+        showToast(settings.lang === 'ko' ? '구글 드라이브 폴더 연결에 실패했습니다.' : 'Google Drive folder error.');
+        throw err;
+      }
+    }
+
+    async function loadFromGoogleDrive() {
+      if (!driveAccessToken) return;
+      try {
+        const folderId = await ensureDriveFolder();
+        const q = encodeURIComponent(`name='${DRIVE_DB_FILENAME}' and '${folderId}' in parents and trashed=false`);
+        const listRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)`, {
+          headers: { Authorization: 'Bearer ' + driveAccessToken }
+        });
+        const listData = await listRes.json();
+        if (listData.files && listData.files.length > 0) {
+          driveDbFileId = listData.files[0].id;
+          const fileRes = await fetch(`https://www.googleapis.com/drive/v3/files/${driveDbFileId}?alt=media`, {
+            headers: { Authorization: 'Bearer ' + driveAccessToken }
+          });
+          const payload = await fileRes.json();
+          if (payload && Array.isArray(payload.records)) records = payload.records;
+          if (payload && payload.roster) roster = payload.roster;
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+          localStorage.setItem(ROSTER_KEY, JSON.stringify(roster));
+          renderAll();
+          updateRetentionUI(true);
+          showToast(settings.lang === 'ko' ? '구글 드라이브 동기화 완료!' : 'Synced with Google Drive!');
+        } else {
+          await syncToGoogleDrive(true);
+        }
+      } catch (err) {
+        showToast(settings.lang === 'ko' ? '구글 드라이브 불러오기 오류' : 'Google Drive load error');
+      }
+    }
+
+    async function syncToGoogleDrive(notify = true) {
+      if (!driveAccessToken) return;
+      try {
+        const folderId = await ensureDriveFolder();
+        const content = JSON.stringify({ records, roster, updatedAt: new Date().toISOString() });
+        const metadata = driveDbFileId
+          ? { name: DRIVE_DB_FILENAME, mimeType: 'application/json' }
+          : { name: DRIVE_DB_FILENAME, mimeType: 'application/json', parents: [folderId] };
+        const boundary = '-------bdj_sync_boundary';
+        const body = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n${content}\r\n--${boundary}--`;
+        const url = driveDbFileId
+          ? `https://www.googleapis.com/upload/drive/v3/files/${driveDbFileId}?uploadType=multipart`
+          : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
+        const res = await fetch(url, {
+          method: driveDbFileId ? 'PATCH' : 'POST',
+          headers: {
+            Authorization: 'Bearer ' + driveAccessToken,
+            'Content-Type': `multipart/related; boundary=${boundary}`
+          },
+          body
+        });
+        const data = await res.json();
+        if (data.id) driveDbFileId = data.id;
+        if (notify) showToast(settings.lang === 'ko' ? '구글 드라이브에 백업되었습니다.' : 'Saved to Google Drive.');
+      } catch (err) {
+        if (notify) showToast(settings.lang === 'ko' ? '구글 드라이브 저장 오류' : 'Google Drive sync error');
+      }
+    }
+
+    function startGoogleSignIn() {
+      const clientId = (settings.clientId || '').trim();
+      if (!clientId) {
+        showToast(settings.lang === 'ko' ? '먼저 Google OAuth Client ID를 입력해 저장해 주세요.' : 'Please enter and save a Google OAuth Client ID first.');
+        return;
+      }
+      if (typeof google === 'undefined' || !google.accounts || !google.accounts.oauth2) {
+        showToast(settings.lang === 'ko' ? 'Google 로그인 스크립트를 불러올 수 없습니다.' : 'Google Sign-In unavailable.');
+        return;
+      }
+      const tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: clientId,
+        scope: 'https://www.googleapis.com/auth/drive.file',
+        callback: (resp) => {
+          if (resp && resp.access_token) {
+            driveAccessToken = resp.access_token;
+            updateCloudBadge(true, settings.lang === 'ko' ? 'Google 드라이브 연결됨' : 'Connected to Google Drive');
+            loadFromGoogleDrive();
+          }
+        }
+      });
+      tokenClient.requestAccessToken();
+    }
+
+    // --- Rendering ---
+    function getFilteredRecords() {
+      const q = searchQuery.trim().toLowerCase();
+      const sorted = [...records].sort((a, b) => b.date.localeCompare(a.date));
+      if (!q) return sorted;
+      return sorted.filter(r => [r.date, r.shift, r.overtime ? 'overtime ot' : '', r.depot, r.busNumbers, r.routes, r.ocrText, r.memo].join(' ').toLowerCase().includes(q));
+    }
+
+    function renderStats() {
+      const unit = settings.lang === 'ko' ? '건' : '';
+      document.getElementById('stat-total').textContent = records.length + unit;
+      const monthPrefix = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
+      document.getElementById('stat-month').textContent = records.filter(r => r.date.startsWith(monthPrefix)).length + unit;
+      const sorted = [...records].sort((a, b) => b.date.localeCompare(a.date));
+      document.getElementById('stat-last-bus').textContent = (sorted[0] && sorted[0].busNumbers) || '-';
+    }
+
+    function renderCalendar() {
+      const monthNamesEn = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      document.getElementById('calendar-month-title').textContent = settings.lang === 'ko'
+        ? `${currentYear}년 ${currentMonth + 1}월`
+        : `${monthNamesEn[currentMonth]} ${currentYear}`;
+
+      const grid = document.getElementById('calendar-grid');
+      grid.innerHTML = '';
+      const firstDay = new Date(currentYear, currentMonth, 1);
+      const startOffset = (firstDay.getDay() + 6) % 7;
+      const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+
+      for (let i = 0; i < startOffset; i++) {
+        const empty = document.createElement('div');
+        empty.className = 'calendar-cell bg-zinc-950/60 p-1.5';
+        grid.appendChild(empty);
+      }
+
+      const recMap = {};
+      records.forEach(r => { recMap[r.date] = r; });
+
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const rec = recMap[dateStr];
+        const rShift = roster[dateStr] || '';
+        const shiftLabel = rec ? rec.shift : rShift;
+        const isOff = !rec && ['OFF', 'AL', 'OBR', 'RJECT', 'TOASG'].includes(shiftLabel);
+
+        const cell = document.createElement('button');
+        cell.type = 'button';
+        cell.className = `calendar-cell text-left p-1.5 sm:p-2 flex flex-col justify-between transition hover:bg-zinc-900 cursor-pointer ${rec ? 'bg-zinc-900/90' : ''}`;
+
+        const top = document.createElement('div');
+        top.className = 'flex items-center justify-between w-full';
+        const dNum = document.createElement('span');
+        dNum.textContent = day;
+        dNum.className = rec
+          ? 'w-6 h-6 rounded-full bg-[#f95d3b] text-white text-xs font-bold flex items-center justify-center'
+          : `text-xs sm:text-sm font-bold ${isOff ? 'text-zinc-500' : 'text-zinc-200'}`;
+        top.appendChild(dNum);
+
+        if (rec) {
+          const icons = document.createElement('span');
+          icons.className = 'text-[10px]';
+          icons.textContent = (rec.pinned ? '📌' : '') + (rec.photoData ? '📷' : '');
+          top.appendChild(icons);
+        }
+        cell.appendChild(top);
+
+        const bottom = document.createElement('div');
+        bottom.className = 'mt-1 space-y-0.5 w-full overflow-hidden';
+        if (shiftLabel) {
+          const sEl = document.createElement('div');
+          sEl.textContent = (rec && rec.overtime ? '⚡' : '') + shiftLabel;
+          sEl.className = `text-[10px] sm:text-xs font-semibold truncate ${rec ? 'text-orange-300' : (isOff ? 'text-zinc-500' : 'text-zinc-300')}`;
+          bottom.appendChild(sEl);
+        }
+        if (rec && rec.busNumbers) {
+          const bEl = document.createElement('div');
+          bEl.textContent = `🚌 ${rec.busNumbers}`;
+          bEl.className = 'text-[10px] text-emerald-400 font-medium truncate';
+          bottom.appendChild(bEl);
+        }
+        cell.appendChild(bottom);
+
+        cell.addEventListener('click', () => {
+          if (rec) openDetailModal(rec.id);
+          else openFormModal(null, dateStr, rShift && !isOff ? rShift : '');
+        });
+        grid.appendChild(cell);
+      }
+    }
+
+    function renderList() {
+      const container = document.getElementById('records-list');
+      const filtered = getFilteredRecords();
+      const banner = document.getElementById('search-banner');
+      if (searchQuery.trim()) {
+        banner.classList.remove('hidden');
+        document.getElementById('search-count').textContent = filtered.length;
+        document.getElementById('search-term-display').textContent = searchQuery.trim();
+      } else {
+        banner.classList.add('hidden');
+      }
+
+      if (!filtered.length) {
+        container.innerHTML = `<div class="bg-white rounded-2xl p-8 text-center border border-zinc-200 text-zinc-500 text-sm">${settings.lang === 'ko' ? '일치하는 기록이 없습니다.' : 'No matching logs found.'}</div>`;
+        return;
+      }
+
+      container.innerHTML = '';
+      filtered.forEach(r => {
+        const card = document.createElement('div');
+        card.className = 'bg-white rounded-2xl p-4 shadow-sm border border-zinc-200 hover:border-[#f95d3b] transition cursor-pointer flex gap-3.5 items-start';
+        card.innerHTML = `
+          <div class="w-16 h-20 sm:w-20 sm:h-24 rounded-xl bg-zinc-100 border border-zinc-200 overflow-hidden shrink-0 flex items-center justify-center">
+            ${r.photoData ? `<img src="${r.photoData}" alt="저널" class="w-full h-full object-cover" />` : `<span class="text-xs text-zinc-400">📝</span>`}
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex flex-wrap items-center gap-1.5">
+              <span class="font-bold text-zinc-900 text-sm sm:text-base">${r.date}</span>
+              <span class="px-2 py-0.5 rounded-md bg-orange-100 text-[#f95d3b] text-xs font-bold">${r.shift || '-'}</span>
+              ${r.overtime ? '<span class="px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 text-xs font-bold">⚡OT</span>' : ''}
+              ${r.pinned ? '<span class="px-1.5 py-0.5 rounded-md bg-indigo-100 text-indigo-800 text-xs font-bold">📌</span>' : ''}
+              ${r.busNumbers ? `<span class="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-xs font-bold">🚌 ${r.busNumbers}</span>` : ''}
+            </div>
+            ${r.routes ? `<p class="text-xs text-zinc-600 mt-1.5 font-medium">Routes: ${r.routes}</p>` : ''}
+            ${r.memo ? `<p class="text-xs sm:text-sm text-zinc-700 mt-1.5 line-clamp-2">${r.memo}</p>` : ''}
+          </div>`;
+        card.addEventListener('click', () => openDetailModal(r.id));
+        container.appendChild(card);
+      });
+    }
+
+    function switchTab(tab) {
+      currentTab = tab;
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        const active = btn.dataset.tab === tab;
+        btn.className = `tab-btn px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition cursor-pointer ${active ? 'bg-[#f95d3b] text-white' : 'text-zinc-300 hover:text-white'}`;
+      });
+      document.getElementById('view-calendar').classList.toggle('hidden', tab !== 'calendar');
+      document.getElementById('view-list').classList.toggle('hidden', tab !== 'list');
+      document.getElementById('view-settings').classList.toggle('hidden', tab !== 'settings');
+      renderAll();
+    }
+
+    function renderAll() {
+      renderStats();
+      if (currentTab === 'calendar') renderCalendar();
+      if (currentTab === 'list') renderList();
+    }
+
+    // --- Detail Modal & Lightbox ---
+    function switchDetailMobileTab(tab) {
+      const pInfo = document.getElementById('detail-pane-info');
+      const pPhoto = document.getElementById('detail-pane-photo');
+      const bInfo = document.getElementById('btn-detail-tab-info');
+      const bPhoto = document.getElementById('btn-detail-tab-photo');
+      if (tab === 'photo') {
+        pInfo.classList.add('hidden', 'lg:block');
+        pPhoto.classList.remove('hidden'); pPhoto.classList.add('flex');
+        bPhoto.className = 'py-2 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer bg-white text-[#f95d3b] shadow-xs';
+        bInfo.className = 'py-2 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer text-zinc-600 hover:text-zinc-900';
+      } else {
+        pInfo.classList.remove('hidden');
+        pPhoto.classList.add('hidden'); pPhoto.classList.remove('flex'); pPhoto.classList.add('lg:flex');
+        bInfo.className = 'py-2 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer bg-white text-[#f95d3b] shadow-xs';
+        bPhoto.className = 'py-2 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer text-zinc-600 hover:text-zinc-900';
+      }
+    }
+
+    function applyImageZoom(imgEl, zoomVal) {
+      if (zoomVal <= 1) {
+        imgEl.style.width = zoomVal === 1 ? '' : `${Math.round(zoomVal * 100)}%`;
+        imgEl.style.maxWidth = '100%';
+        imgEl.style.maxHeight = zoomVal === 1 ? '100%' : 'none';
+      } else {
+        imgEl.style.width = `${Math.round(zoomVal * 100)}%`;
+        imgEl.style.maxWidth = 'none';
+        imgEl.style.maxHeight = 'none';
+      }
+    }
+
+    function updateZoomUI() {
+      applyImageZoom(document.getElementById('detail-photo'), currentZoom);
+      document.getElementById('zoom-label').textContent = Math.round(currentZoom * 100) + '%';
+    }
+
+    function updateLightboxZoomUI() {
+      applyImageZoom(document.getElementById('lightbox-photo'), lightboxZoom);
+      document.getElementById('lb-zoom-label').textContent = Math.round(lightboxZoom * 100) + '%';
+    }
+
+    function openLightbox() {
+      const rec = records.find(r => r.id === activeDetailId);
+      if (!rec || !rec.photoData) return;
+      lightboxZoom = 1;
+      document.getElementById('lightbox-photo').src = rec.photoData;
+      updateLightboxZoomUI();
+      document.getElementById('modal-lightbox').classList.remove('hidden');
+    }
+
+    function openDetailModal(id) {
+      const rec = records.find(r => r.id === id);
+      if (!rec) return;
+      activeDetailId = id;
+      currentZoom = 1;
+      updateZoomUI();
+
+      document.getElementById('detail-date').textContent = rec.date;
+      document.getElementById('detail-shift').textContent = (rec.shift || '-') + (rec.overtime ? ' (⚡OT)' : '');
+      document.getElementById('detail-pin-badge').classList.toggle('hidden', !rec.pinned);
+      document.getElementById('detail-depot').textContent = rec.depot || settings.depot;
+      document.getElementById('detail-signon').textContent = rec.signOn || '-';
+      document.getElementById('detail-signoff').textContent = rec.signOff || '-';
+      document.getElementById('detail-spread').textContent = rec.spread || '-';
+      document.getElementById('detail-ocr').textContent = rec.ocrText || '-';
+      document.getElementById('detail-memo').textContent = rec.memo || '-';
+
+      const busWrap = document.getElementById('detail-buses');
+      busWrap.innerHTML = '';
+      (rec.busNumbers || '').split(',').map(s => s.trim()).filter(Boolean).forEach(b => {
+        const pill = document.createElement('span');
+        pill.className = 'px-3 py-1 rounded-xl bg-emerald-100 text-emerald-900 font-bold text-sm';
+        pill.textContent = '🚌 ' + b;
+        busWrap.appendChild(pill);
+      });
+      if (!busWrap.children.length) busWrap.innerHTML = '<span class="text-sm text-zinc-400">-</span>';
+
+      const rtWrap = document.getElementById('detail-routes');
+      rtWrap.innerHTML = '';
+      (rec.routes || '').split(',').map(s => s.trim()).filter(Boolean).forEach(rt => {
+        const pill = document.createElement('span');
+        pill.className = 'px-2.5 py-0.5 rounded-lg bg-zinc-100 border border-zinc-200 text-zinc-800 font-semibold text-xs';
+        pill.textContent = rt;
+        rtWrap.appendChild(pill);
+      });
+      if (!rtWrap.children.length) rtWrap.innerHTML = '<span class="text-sm text-zinc-400">-</span>';
+
+      const img = document.getElementById('detail-photo');
+      const noPhoto = document.getElementById('detail-no-photo');
+      const mCard = document.getElementById('btn-mobile-photo-card');
+      const btnLb = document.getElementById('btn-open-lightbox');
+      if (rec.photoData) {
+        img.src = rec.photoData; img.classList.remove('hidden'); noPhoto.classList.add('hidden');
+        document.getElementById('detail-thumb-img').src = rec.photoData;
+        mCard.classList.remove('hidden'); btnLb.classList.remove('hidden');
+      } else {
+        img.src = ''; img.classList.add('hidden'); noPhoto.classList.remove('hidden');
+        mCard.classList.add('hidden'); btnLb.classList.add('hidden');
+      }
+
+      switchDetailMobileTab('info');
+      document.getElementById('btn-delete-ask').classList.remove('hidden');
+      document.getElementById('btn-delete-confirm').classList.add('hidden');
+      document.getElementById('btn-delete-cancel').classList.add('hidden');
+      document.getElementById('modal-detail').classList.remove('hidden');
+    }
+
+    // --- Form Modal & OCR ---
+    function openFormModal(editId = null, prefillDate = '', prefillShift = '') {
+      document.getElementById('journal-form').reset();
+      pendingPhotoData = '';
+      document.getElementById('photo-preview-wrap').classList.add('hidden');
+      document.getElementById('ocr-status').classList.add('hidden');
+
+      if (editId) {
+        const rec = records.find(r => r.id === editId);
+        if (!rec) return;
+        document.getElementById('form-modal-title').textContent = settings.lang === 'ko' ? '저널 기록 수정' : 'Edit Shift Log';
+        document.getElementById('field-id').value = rec.id;
+        document.getElementById('field-date').value = rec.date;
+        document.getElementById('field-shift').value = rec.shift || '';
+        document.getElementById('field-overtime').checked = !!rec.overtime;
+        document.getElementById('field-pinned').checked = !!rec.pinned;
+        document.getElementById('field-depot').value = rec.depot || settings.depot;
+        document.getElementById('field-buses').value = rec.busNumbers || '';
+        document.getElementById('field-routes').value = rec.routes || '';
+        document.getElementById('field-signon').value = rec.signOn || '';
+        document.getElementById('field-signoff').value = rec.signOff || '';
+        document.getElementById('field-spread').value = rec.spread || '';
+        document.getElementById('field-ocr').value = rec.ocrText || '';
+        document.getElementById('field-memo').value = rec.memo || '';
+        if (rec.photoData) {
+          pendingPhotoData = rec.photoData;
+          document.getElementById('photo-preview-img').src = rec.photoData;
+          document.getElementById('photo-preview-wrap').classList.remove('hidden');
+        }
+      } else {
+        document.getElementById('form-modal-title').textContent = settings.lang === 'ko' ? '새 저널 기록 추가' : 'New Shift Log';
+        document.getElementById('field-id').value = '';
+        document.getElementById('field-date').value = prefillDate || new Date().toISOString().slice(0, 10);
+        document.getElementById('field-shift').value = prefillShift || '';
+        document.getElementById('field-depot').value = settings.depot;
+      }
+      document.getElementById('modal-form').classList.remove('hidden');
+    }
+
+    function compressImage(file, cb) {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const img = new Image();
+        img.onload = () => {
+          const maxDim = 1400;
+          let w = img.width, h = img.height;
+          if (w > maxDim || h > maxDim) {
+            if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+            else { w = Math.round(w * maxDim / h); h = maxDim; }
+          }
+          const c = document.createElement('canvas');
+          c.width = w; c.height = h;
+          c.getContext('2d').drawImage(img, 0, 0, w, h);
+          cb(c.toDataURL('image/jpeg', 0.82));
+        };
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function parseJournalTextAndFill(text) {
+      const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      const full = lines.join('\n');
+      const dMatch = full.match(/(\d{2})\/(\d{2})\/(20\d{2})/);
+      if (dMatch) document.getElementById('field-date').value = `${dMatch[3]}-${dMatch[2]}-${dMatch[1]}`;
+      const sMatch = full.match(/SHIFT\s*[:;]?\s*([A-Z]{1,3}\d{2,4}[A-Za-z]?)/i) || full.match(/\b(WD\d{2,4}[a-z]?|W\d{3,4}[a-z]?)\b/i);
+      if (sMatch) document.getElementById('field-shift').value = sMatch[1].toUpperCase();
+      const allHhMm = full.match(/\b\d{2}h\d{2}\b/gi) || [];
+      if (allHhMm.length && !document.getElementById('field-spread').value) document.getElementById('field-spread').value = allHhMm[allHhMm.length - 1];
+      const times = full.match(/\b([01]\d|2[0-3]):[0-5]\d\b/g) || [];
+      if (times.length >= 2) {
+        if (!document.getElementById('field-signon').value) document.getElementById('field-signon').value = times[0];
+        const sortedT = [...times].sort();
+        if (!document.getElementById('field-signoff').value) document.getElementById('field-signoff').value = sortedT[sortedT.length - 1];
+      }
+      const rSet = new Set();
+      lines.forEach(line => { const m = line.match(/^(\d{3})\s+\d{1,3}\b/); if (m) rSet.add(m[1]); });
+      if (rSet.size) document.getElementById('field-routes').value = Array.from(rSet).join(', ');
+      document.getElementById('field-ocr').value = full;
+    }
+
+    async function runOcr(dataUrl) {
+      const el = document.getElementById('ocr-status');
+      el.className = 'text-xs font-medium px-3 py-2 rounded-xl bg-blue-50 text-blue-800 border border-blue-200';
+      el.textContent = settings.lang === 'ko' ? '🔍 사진에서 저널 정보를 읽는 중...' : '🔍 Reading journal text...';
+      try {
+        if (typeof Tesseract === 'undefined') throw new Error('No OCR');
+        const res = await Tesseract.recognize(dataUrl, 'eng', {
+          logger: m => { if (m.status === 'recognizing text') el.textContent = `🔍 OCR... (${Math.round(m.progress * 100)}%)`; }
+        });
+        const txt = (res && res.data && res.data.text) ? res.data.text.trim() : '';
+        if (!txt) throw new Error('Empty');
+        parseJournalTextAndFill(txt);
+        el.className = 'text-xs font-medium px-3 py-2 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200';
+        el.textContent = settings.lang === 'ko' ? '✅ 자동 입력 완료! 차량 번호를 확인해 주세요.' : '✅ Auto-filled! Please verify Bus No.';
+      } catch (e) {
+        el.className = 'text-xs font-medium px-3 py-2 rounded-xl bg-amber-50 text-amber-800 border border-amber-200';
+        el.textContent = settings.lang === 'ko' ? '⚠️ 자동 인식 실패 — 항목을 직접 입력해 주세요.' : '⚠️ OCR failed — please enter manually.';
+      }
+    }
+
+    // --- Roster Modal ---
+    function openRosterModal() {
+      const days = new Date(currentYear, currentMonth + 1, 0).getDate();
+      document.getElementById('roster-modal-title').textContent = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')} Roster`;
+      document.getElementById('roster-bulk-input').value = '';
+      const grid = document.getElementById('roster-days-grid');
+      grid.innerHTML = '';
+      for (let d = 1; d <= days; d++) {
+        const ds = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        const wrap = document.createElement('div');
+        wrap.className = 'flex items-center gap-1.5 bg-zinc-50 border border-zinc-200 rounded-xl px-2.5 py-1.5';
+        wrap.innerHTML = `<span class="text-xs font-bold text-zinc-600 w-7 shrink-0">${d}</span>
+          <input type="text" data-date="${ds}" value="${roster[ds] || ''}" placeholder="OFF/WD"
+            class="roster-day-input w-full bg-white rounded-lg border border-zinc-300 px-2 py-1 text-xs uppercase focus:outline-none focus:border-[#f95d3b]" />`;
+        grid.appendChild(wrap);
+      }
+      document.getElementById('modal-roster').classList.remove('hidden');
+    }
+
+    // --- Init & Listeners ---
+    document.addEventListener('DOMContentLoaded', () => {
+      loadLocalState();
+      document.getElementById('setting-client-id').value = settings.clientId || '';
+      document.getElementById('setting-default-depot').value = settings.depot || 'Waverley Depot';
+      document.getElementById('setting-retention-days').value = String(settings.retentionDays);
+      document.getElementById('setting-retention-mode').value = settings.retentionMode;
+      document.getElementById('setting-keep-memos').checked = !!settings.keepMemos;
+
+      applyTranslations();
+      renderAll();
+      updateRetentionUI(true);
+
+      document.getElementById('btn-toggle-lang').addEventListener('click', () => {
+        settings.lang = settings.lang === 'ko' ? 'en' : 'ko';
+        saveLocalState();
+        applyTranslations();
+        renderAll();
+        updateRetentionUI(false);
+      });
+
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
+      document.getElementById('btn-prev-month').addEventListener('click', () => { currentMonth--; if (currentMonth < 0) { currentMonth = 11; currentYear--; } renderAll(); });
+      document.getElementById('btn-next-month').addEventListener('click', () => { currentMonth++; if (currentMonth > 11) { currentMonth = 0; currentYear++; } renderAll(); });
+
+      const sInput = document.getElementById('search-input');
+      const cBtn = document.getElementById('btn-clear-search');
+      sInput.addEventListener('input', () => {
+        searchQuery = sInput.value;
+        cBtn.classList.toggle('hidden', !searchQuery);
+        if (searchQuery.trim() && currentTab === 'calendar') switchTab('list');
+        else renderList();
+      });
+      const resetSearch = () => { sInput.value = ''; searchQuery = ''; cBtn.classList.add('hidden'); renderList(); };
+      cBtn.addEventListener('click', resetSearch);
+      document.getElementById('btn-reset-search').addEventListener('click', resetSearch);
+
+      // Form
+      document.getElementById('btn-open-add').addEventListener('click', () => openFormModal());
+      document.getElementById('btn-close-form').addEventListener('click', () => document.getElementById('modal-form').classList.add('hidden'));
+      document.getElementById('btn-cancel-form').addEventListener('click', () => document.getElementById('modal-form').classList.add('hidden'));
+
+      const handlePhoto = (e) => {
+        const f = e.target.files[0]; if (!f) return;
+        compressImage(f, (dataUrl) => {
+          pendingPhotoData = dataUrl;
+          document.getElementById('photo-preview-img').src = dataUrl;
+          document.getElementById('photo-preview-wrap').classList.remove('hidden');
+          runOcr(dataUrl);
+        });
+        e.target.value = '';
+      };
+      document.getElementById('field-photo-camera').addEventListener('change', handlePhoto);
+      document.getElementById('field-photo-gallery').addEventListener('change', handlePhoto);
+
+      document.getElementById('journal-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const id = document.getElementById('field-id').value || ('rec-' + Date.now());
+        const entry = {
+          id,
+          date: document.getElementById('field-date').value,
+          shift: document.getElementById('field-shift').value.trim(),
+          overtime: document.getElementById('field-overtime').checked,
+          pinned: document.getElementById('field-pinned').checked,
+          depot: document.getElementById('field-depot').value.trim() || settings.depot,
+          busNumbers: document.getElementById('field-buses').value.trim(),
+          routes: document.getElementById('field-routes').value.trim(),
+          signOn: document.getElementById('field-signon').value.trim(),
+          signOff: document.getElementById('field-signoff').value.trim(),
+          spread: document.getElementById('field-spread').value.trim(),
+          ocrText: document.getElementById('field-ocr').value.trim(),
+          memo: document.getElementById('field-memo').value.trim(),
+          photoData: pendingPhotoData,
+          updatedAt: new Date().toISOString()
+        };
+        const idx = records.findIndex(r => r.id === id);
+        if (idx >= 0) records[idx] = entry; else records.push(entry);
+        saveLocalState();
+        document.getElementById('modal-form').classList.add('hidden');
+        renderAll();
+        updateRetentionUI(false);
+        showToast(settings.lang === 'ko' ? '저장되었습니다.' : 'Log saved.');
+      });
+
+      // Detail & Lightbox
+      document.getElementById('btn-close-detail').addEventListener('click', () => document.getElementById('modal-detail').classList.add('hidden'));
+      document.getElementById('btn-detail-tab-info').addEventListener('click', () => switchDetailMobileTab('info'));
+      document.getElementById('btn-detail-tab-photo').addEventListener('click', () => switchDetailMobileTab('photo'));
+      document.getElementById('btn-mobile-photo-card').addEventListener('click', openLightbox);
+      document.getElementById('btn-open-lightbox').addEventListener('click', openLightbox);
+      document.getElementById('detail-photo').addEventListener('click', openLightbox);
+      document.getElementById('btn-zoom-in').addEventListener('click', () => { currentZoom = Math.min(3, currentZoom + 0.25); updateZoomUI(); });
+      document.getElementById('btn-zoom-out').addEventListener('click', () => { currentZoom = Math.max(0.5, currentZoom - 0.25); updateZoomUI(); });
+      document.getElementById('btn-zoom-reset').addEventListener('click', () => { currentZoom = 1; updateZoomUI(); });
+      document.getElementById('btn-close-lightbox').addEventListener('click', () => document.getElementById('modal-lightbox').classList.add('hidden'));
+      document.getElementById('btn-lb-zoom-in').addEventListener('click', () => { lightboxZoom = Math.min(3.5, lightboxZoom + 0.25); updateLightboxZoomUI(); });
+      document.getElementById('btn-lb-zoom-out').addEventListener('click', () => { lightboxZoom = Math.max(0.5, lightboxZoom - 0.25); updateLightboxZoomUI(); });
+      document.getElementById('btn-lb-zoom-reset').addEventListener('click', () => { lightboxZoom = 1; updateLightboxZoomUI(); });
+
+      document.getElementById('btn-edit-detail').addEventListener('click', () => {
+        document.getElementById('modal-detail').classList.add('hidden');
+        openFormModal(activeDetailId);
+      });
+      document.getElementById('btn-delete-ask').addEventListener('click', () => {
+        document.getElementById('btn-delete-ask').classList.add('hidden');
+        document.getElementById('btn-delete-confirm').classList.remove('hidden');
+        document.getElementById('btn-delete-cancel').classList.remove('hidden');
+      });
+      document.getElementById('btn-delete-cancel').addEventListener('click', () => {
+        document.getElementById('btn-delete-ask').classList.remove('hidden');
+        document.getElementById('btn-delete-confirm').classList.add('hidden');
+        document.getElementById('btn-delete-cancel').classList.add('hidden');
+      });
+      document.getElementById('btn-delete-confirm').addEventListener('click', () => {
+        records = records.filter(r => r.id !== activeDetailId);
+        saveLocalState();
+        document.getElementById('modal-detail').classList.add('hidden');
+        renderAll();
+        updateRetentionUI(false);
+        showToast(settings.lang === 'ko' ? '삭제되었습니다.' : 'Deleted.');
+      });
+
+      // Roster
+      document.getElementById('btn-open-roster').addEventListener('click', openRosterModal);
+      document.getElementById('btn-close-roster').addEventListener('click', () => document.getElementById('modal-roster').classList.add('hidden'));
+      document.getElementById('btn-cancel-roster').addEventListener('click', () => document.getElementById('modal-roster').classList.add('hidden'));
+      document.getElementById('btn-apply-bulk-roster').addEventListener('click', () => {
+        const raw = document.getElementById('roster-bulk-input').value.trim();
+        let cnt = 0;
+        raw.split(/[,\n]+/).forEach(p => {
+          const m = p.trim().match(/^(\d{1,2})\s*[:=\s]\s*([A-Za-z0-9*\-]+)$/);
+          if (m) {
+            const ds = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(parseInt(m[1], 10)).padStart(2, '0')}`;
+            const inp = document.querySelector(`.roster-day-input[data-date="${ds}"]`);
+            if (inp) { inp.value = m[2].toUpperCase(); cnt++; }
+          }
+        });
+        showToast(cnt ? `${cnt} days filled.` : 'Check format: 1:WD194, 2:OFF');
+      });
+      document.getElementById('btn-save-roster').addEventListener('click', () => {
+        document.querySelectorAll('.roster-day-input').forEach(inp => {
+          const v = inp.value.trim().toUpperCase();
+          if (v) roster[inp.dataset.date] = v; else delete roster[inp.dataset.date];
+        });
+        saveLocalState();
+        document.getElementById('modal-roster').classList.add('hidden');
+        renderAll();
+        showToast(settings.lang === 'ko' ? '시프트가 저장되었습니다.' : 'Roster saved.');
+      });
+
+      // Settings: Cloud, Retention, Depot, Export/Import
+      document.getElementById('btn-save-client-id').addEventListener('click', () => {
+        settings.clientId = document.getElementById('setting-client-id').value.trim();
+        saveLocalState();
+        showToast('Client ID saved.');
+      });
+      document.getElementById('btn-google-signin').addEventListener('click', startGoogleSignIn);
+      document.getElementById('btn-quick-sync').addEventListener('click', () => syncToGoogleDrive(true));
+      document.getElementById('btn-drive-sync-now').addEventListener('click', () => syncToGoogleDrive(true));
+      document.getElementById('btn-google-signout').addEventListener('click', () => {
+        driveAccessToken = ''; driveFolderId = ''; driveDbFileId = '';
+        updateCloudBadge(false, settings.lang === 'ko' ? '오프라인 / 로컬 모드 (클라우드 미연결)' : 'Offline / Local Mode');
+        showToast(settings.lang === 'ko' ? '구글 드라이브 연결이 해제되었습니다.' : 'Disconnected.');
+      });
+
+      document.getElementById('btn-save-retention').addEventListener('click', () => {
+        settings.retentionDays = Number(document.getElementById('setting-retention-days').value);
+        settings.retentionMode = document.getElementById('setting-retention-mode').value;
+        settings.keepMemos = document.getElementById('setting-keep-memos').checked;
+        saveLocalState();
+        updateRetentionUI(true);
+        showToast(settings.lang === 'ko' ? '보관 기간 설정이 저장되었습니다.' : 'Retention settings saved.');
+      });
+      document.getElementById('btn-check-cleanup-now').addEventListener('click', openCleanupModal);
+      document.getElementById('btn-open-cleanup').addEventListener('click', openCleanupModal);
+      document.getElementById('btn-dismiss-retention').addEventListener('click', () => document.getElementById('retention-banner').classList.add('hidden'));
+      document.getElementById('btn-close-cleanup').addEventListener('click', () => document.getElementById('modal-cleanup').classList.add('hidden'));
+      document.getElementById('btn-cancel-cleanup').addEventListener('click', () => document.getElementById('modal-cleanup').classList.add('hidden'));
+      document.getElementById('btn-execute-cleanup').addEventListener('click', () => {
+        const cnt = executeCleanup(getExpiredRecords());
+        document.getElementById('modal-cleanup').classList.add('hidden');
+        showToast(settings.lang === 'ko' ? `${cnt}건의 오래된 기록을 정리했습니다.` : `Cleaned up ${cnt} log(s).`);
+      });
+
+      document.getElementById('btn-save-depot').addEventListener('click', () => {
+        settings.depot = document.getElementById('setting-default-depot').value.trim() || 'My Depot';
+        saveLocalState();
+        applyTranslations();
+        showToast(settings.lang === 'ko' ? '기본 디포가 저장되었습니다.' : 'Depot saved.');
+      });
+
+      document.getElementById('btn-export-csv').addEventListener('click', () => {
+        const headers = ['Date', 'Shift', 'Overtime', 'Pinned', 'Depot', 'BusNumbers', 'SignOn', 'SignOff', 'Spread', 'Routes', 'OcrText', 'Memo'];
+        const rows = records.map(r => headers.map(h => {
+          const k = h.charAt(0).toLowerCase() + h.slice(1);
+          return `"${String(r[k] ?? '').replace(/"/g, '""')}"`;
+        }).join(','));
+        const blob = new Blob(['\uFEFF' + [headers.join(','), ...rows].join('\n')], { type: 'text/csv;charset=utf-8;' });
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `bus_driver_journal_${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+      });
+
+      document.getElementById('btn-export-json').addEventListener('click', () => {
+        const blob = new Blob([JSON.stringify({ records, roster, settings }, null, 2)], { type: 'application/json' });
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `bus_driver_journal_backup_${new Date().toISOString().slice(0, 10)}.json`; a.click();
+      });
+
+      document.getElementById('input-import-json').addEventListener('change', (e) => {
+        const f = e.target.files[0]; if (!f) return;
+        const r = new FileReader();
+        r.onload = (ev) => {
+          try {
+            const data = JSON.parse(ev.target.result);
+            if (Array.isArray(data)) records = data;
+            else if (data && Array.isArray(data.records)) { records = data.records; if (data.roster) roster = data.roster; }
+            else throw new Error('Invalid');
+            saveLocalState(); renderAll(); updateRetentionUI(false);
+            showToast(settings.lang === 'ko' ? `${records.length}건을 불러왔습니다.` : `Imported ${records.length} logs.`);
+          } catch (err) { showToast('Invalid JSON file.'); }
+        };
+        r.readAsText(f);
+      });
+    });
+  </script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+    }
+  </script>
+</body>
+</html>
